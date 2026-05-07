@@ -2,27 +2,23 @@
 <html lang="ko">
 
 <head>
-       
     <meta charset="UTF-8">
-       
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>입체도형 단면 마스터 | AI-ON</title>
-       
+    <title>3D Geometry Section Analyzer | AI-ON</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-       
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-       
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-       
-    <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Outfit:wght@500;700&display=swap"
-        rel="stylesheet">
-       
-        <style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <style>
         :root {
-            --primary: #3b82f6;
-            --glass-bg: rgba(255, 255, 255, 0.98);
-            --shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --bg-main: #F1F3F5;
+            --text-main: #334155;
+            --text-sub: #64748b;
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --radius: 12px;
         }
 
         * {
@@ -34,439 +30,703 @@
         }
 
         body {
-            font-family: 'Noto Sans KR', sans-serif;
-            background: #f8fafc;
+            font-family: 'Inter', 'Outfit', sans-serif;
+            background: var(--bg-main);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* 스크롤 방지 */
+            color: var(--text-main);
         }
 
-        /* 3D 뷰포트 */
+        /* 3D 뷰포트 영역 */
         #viewport-wrapper {
             flex: 1;
             position: relative;
-            background: radial-gradient(circle at center, #ffffff 0%, #e2e8f0 100%);
+            background: radial-gradient(circle at 50% 50%, #ffffff 0%, #e9ecef 100%);
             overflow: hidden;
-            cursor: grab;
-            /* 기본은 회전 */
             touch-action: none;
         }
 
-        /* 자르기 선 (빨간색으로 변경하여 더 직관적으로) */
+        /* 자르기 레이저 선 */
         #slice-line {
             position: absolute;
             height: 2px;
-            background: #ef4444;
-            /* 이미지의 빨간 선 색상 */
+            background: #f87171;
             display: none;
             pointer-events: none;
             z-index: 100;
-            box-shadow: 0 0 8px #ef4444;
+            box-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+            border-radius: 1px;
         }
 
-        /* 2D 단면 뷰어 (상단 우측 배칭) */
+        /* 분석 결과 패널 (우상단) */
         #section-preview {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 160px;
+            top: 24px;
+            right: 24px;
+            width: 200px;
             background: var(--glass-bg);
-            border-radius: 20px;
-            border: 2px solid var(--primary);
+            backdrop-filter: blur(16px);
+            border-radius: var(--radius);
             box-shadow: var(--shadow);
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 12px;
+            padding: 20px;
             z-index: 200;
             opacity: 0;
-            transition: opacity 0.5s;
-            pointer-events: none;
+            transform: translateY(-10px);
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
 
         #section-preview.visible {
             opacity: 1;
-        }
-
-        #section-preview canvas {
-            width: 120px;
-            height: 120px;
+            transform: translateY(0);
         }
 
         #section-preview p {
             font-size: 0.85rem;
-            font-weight: 800;
-            color: #1e293b;
-            margin-bottom: 5px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--text-sub);
+            margin-bottom: 12px;
+            text-transform: uppercase;
         }
 
-        /* 컬러 피커 (상단 중앙 배칭) */
+        #section-preview canvas {
+            width: 140px;
+            height: 140px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.02);
+        }
+
+        #section-preview .shape-info {
+            margin-top: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.01em;
+        }
+
+        /* 컬러 팔레트 (중상단) */
         #color-picker {
             position: absolute;
-            top: 20px;
+            top: 24px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 15px;
+            gap: 14px;
             z-index: 200;
             background: var(--glass-bg);
+            backdrop-filter: blur(16px);
             padding: 10px 20px;
-            border-radius: 30px;
+            border-radius: 40px;
             box-shadow: var(--shadow);
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
 
         .color-dot {
-            width: 25px;
-            height: 25px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             cursor: pointer;
             border: 2px solid #fff;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         .color-dot:hover {
-            transform: scale(1.2);
+            transform: scale(1.2) translateY(-2px);
         }
 
-        /* 하단 컨트롤 */
+        /* 하단 컨트롤 레이아웃 */
         .ui-bottom {
             background: #ffffff;
-            padding: 1.5rem;
-            border-top: 1px solid #e2e8f0;
+            padding: 1.2rem 2.5rem;
             z-index: 300;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.04);
+            border-top: 1px solid #e9ecef;
         }
 
         .control-panel {
-            max-width: 600px;
+            max-width: 1100px;
             margin: 0 auto;
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
         }
 
         .btn-group {
             display: flex;
-            justify-content: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 12px;
         }
 
-        button {
-            padding: 10px 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            cursor: pointer;
+        .tool-btn {
             background: #fff;
-            color: #475569;
-            transition: all 0.2s;
-        }
-
-        button.active {
-            background: var(--primary);
-            color: #fff;
-            border-color: var(--primary);
-        }
-
-        .btn-reset {
-            background: #ef4444;
-            color: #fff;
-            border: none;
-            margin-left: 10px;
-        }
-
-        .hint {
-            text-align: center;
-            font-size: 0.8rem;
-            color: #64748b;
-            font-weight: 700;
-        }
-
-        /* 모드 전환 토글 (스크린샷 위치) */
-        .mode-toggle {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--glass-bg);
-            padding: 8px;
-            border-radius: 50px;
-            display: flex;
-            gap: 5px;
-            box-shadow: var(--shadow);
-            z-index: 1000;
-            border: 1px solid #e2e8f0;
-        }
-
-        .mode-btn {
-            padding: 8px 20px;
-            border-radius: 40px;
-            font-size: 0.9rem;
+            border: 1px solid #e9ecef;
+            border-radius: var(--radius);
+            padding: 10px;
             cursor: pointer;
-            border: none;
-            background: transparent;
-            color: #64748b;
-            transition: all 0.3s;
-        }
-
-        .mode-btn.active {
-            background: var(--primary);
-            color: #fff;
-        }
-
-        /* 좌측 고정 자르기 버튼 (아이콘 추가 🚨) */
-        #fixed-slice-btns {
-            position: absolute;
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 200;
-        }
-
-        .slice-btn {
-            width: 80px;
-            height: 80px;
-            border-radius: 15px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 4px;
+            min-width: 72px;
+            color: var(--text-sub);
+        }
+
+        .tool-btn svg {
+            width: 26px;
+            height: 26px;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            fill: none;
+            transition: transform 0.2s ease;
+        }
+
+        .tool-btn span {
             font-size: 0.75rem;
-            font-weight: 800;
+            font-weight: 600;
+        }
+
+        .tool-btn:hover {
+            background: #f8fafc;
+            transform: translateY(-2px);
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+        .tool-btn:hover svg {
+            transform: scale(1.1);
+        }
+
+        .tool-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+        }
+
+        .btn-reset {
+            color: #ef4444;
+        }
+        .btn-reset:hover {
+            background: #fef2f2;
+            border-color: #fca5a5;
+            color: #b91c1c;
+        }
+
+        .hint-text {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-sub);
+            max-width: 300px;
+            text-align: right;
+            line-height: 1.4;
+        }
+
+        /* 모드 토글 (하단 중앙) */
+        .mode-toggle {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
             background: var(--glass-bg);
-            border: 1px solid #e2e8f0;
+            backdrop-filter: blur(16px);
+            padding: 6px;
+            border-radius: 50px;
+            display: flex;
+            gap: 6px;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .mode-btn {
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s;
-            color: #1e293b;
+            border: none;
+            background: transparent;
+            color: var(--text-sub);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .slice-btn:hover {
-            background: #f1f5f9;
-            transform: scale(1.05);
-        }
+        .mode-btn svg { width: 20px; height: 20px; }
 
-        /* 버튼 내 방향 표시 아이콘 (CSS) */
-        .icon-horiz {
-            width: 30px;
-            height: 4px;
+        .mode-btn.active {
             background: var(--primary);
-            border-radius: 2px;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
 
-        .icon-vert {
-            width: 4px;
-            height: 30px;
-            background: var(--primary);
-            border-radius: 2px;
+        /* 좌측 고정 방향 버튼 */
+        #fixed-slice-btns {
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 200;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            padding: 12px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
 
-        .icon-diag {
-            width: 30px;
-            height: 4px;
-            background: var(--primary);
-            border-radius: 2px;
-            transform: rotate(-45deg);
+        .direction-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            border: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            color: var(--text-sub);
         }
+
+        .direction-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            transform: scale(1.1) translateX(4px);
+            border-color: var(--primary);
+        }
+
+        .direction-btn svg { width: 26px; height: 26px; }
     </style>
 </head>
 
 <body>
 
-        <div id="viewport-wrapper">
-                <div id="slice-line"></div>
-                <div id="section-preview">
-                        <p>입체도형의 단면</p>
-                        <canvas id="mini-canvas"></canvas>
-                        <strong id="shape-name" style="color:var(--primary); margin-top:5px">단면</strong>
-                    </div>
-                <div id="color-picker">
-                        <div class="color-dot" style="background:#3b82f6" onclick="changeColor('#3b82f6')"></div>
-                        <div class="color-dot" style="background:#ef4444" onclick="changeColor('#ef4444')"></div>
-                        <div class="color-dot" style="background:#10b981" onclick="changeColor('#10b981')"></div>
-                        <div class="color-dot" style="background:#f59e0b" onclick="changeColor('#f59e0b')"></div>
-                    </div>
-                <div id="fixed-slice-btns">
-                        <button class="slice-btn" onclick="performFixedSlice('horizontal')">
-                                <div class="icon-horiz"></div>가로
-                            </button>
-                        <button class="slice-btn" onclick="performFixedSlice('vertical')">
-                                <div class="icon-vert"></div>세로
-                            </button>
-                        <button class="slice-btn" onclick="performFixedSlice('diagonal')">
-                                <div class="icon-diag"></div>사선
-                            </button>
-                    </div>
-                <div class="mode-toggle">
-                        <button id="btn-rotate" class="mode-btn active" onclick="setMode('rotate')">🔄 회전</button>
-                        <button id="btn-slice" class="mode-btn" onclick="setMode('slice')">🔪 자르기</button>
-                    </div>
-            </div>
-        <div class="ui-bottom">
-                <div class="control-panel">
-                        <div class="btn-group">
-                                <button class="btn-shape active" onclick="changeShape('box', this)">정육면체</button>
-                                <button class="btn-shape" onclick="changeShape('cylinder', this)">원기둥</button>
-                                <button class="btn-shape" onclick="changeShape('cone', this)">원뿔</button>
-                                <button class="btn-shape" onclick="changeShape('sphere', this)">구</button>
-                                <button class="btn-reset" onclick="resetView()">↻ 초기화</button>
-                            </div>
-                        <p id="mode-hint" class="hint">도형을 마우스로 자유롭게 돌려보세요!</p>
-                    </div>
-            </div>
+    <div id="viewport-wrapper">
+        <div id="slice-line"></div>
+        
+        <!-- 분석 패널 -->
+        <div id="section-preview">
+            <p>Section Analysis</p>
+            <canvas id="mini-canvas"></canvas>
+            <div id="shape-name" class="shape-info">SECTION</div>
+        </div>
 
-       
+        <!-- 컬러 피커 -->
+        <div id="color-picker">
+            <div class="color-dot" style="background:#2563eb" onclick="changeColor('#2563eb')"></div>
+            <div class="color-dot" style="background:#dc2626" onclick="changeColor('#dc2626')"></div>
+            <div class="color-dot" style="background:#059669" onclick="changeColor('#059669')"></div>
+            <div class="color-dot" style="background:#d97706" onclick="changeColor('#d97706')"></div>
+        </div>
+
+        <!-- 좌측 방향 프리셋 -->
+        <div id="fixed-slice-btns">
+            <button class="direction-btn" onclick="performFixedSlice('horizontal')" title="가로 자르기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12h16" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="direction-btn" onclick="performFixedSlice('vertical')" title="세로 자르기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4v16" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="direction-btn" onclick="performFixedSlice('diagonal')" title="사선 자르기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 19L19 5" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+
+        <!-- 모드 전환 -->
+        <div class="mode-toggle">
+            <button id="btn-rotate" class="mode-btn active" onclick="setMode('rotate')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                Rotate
+            </button>
+            <button id="btn-slice" class="mode-btn" onclick="setMode('slice')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.77 3.77z"/></svg>
+                Slice
+            </button>
+        </div>
+    </div>
+
+    <!-- 하단 제어부 -->
+    <div class="ui-bottom">
+        <div class="control-panel">
+            <div class="btn-group">
+                <button class="tool-btn btn-shape active" onclick="changeShape('box', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    <span>Cube</span>
+                </button>
+                <button class="tool-btn btn-shape" onclick="changeShape('cylinder', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    <span>Cylinder</span>
+                </button>
+                <button class="tool-btn btn-shape" onclick="changeShape('cone', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L3 19a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3L12 2z"/><ellipse cx="12" cy="19" rx="9" ry="3"/></svg>
+                    <span>Cone</span>
+                </button>
+                <button class="tool-btn btn-shape" onclick="changeShape('sphere', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span>Sphere</span>
+                </button>
+            </div>
+
+            <button class="tool-btn btn-reset" onclick="resetView()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+                <span>Reset</span>
+            </button>
+
+            <div id="mode-hint" class="hint-text">Select a shape and use the Slice tool<br>to analyze its cross-section.</div>
+        </div>
+    </div>
+
     <script>
-        let scene, camera, renderer, controls, currentMesh, planeMesh, stencilGroup, clippingPlane;
-        let shapeColor = 0x3b82f6, currentShapeType = 'box', interactionMode = 'rotate', startPoint = null;
+        let scene, camera, renderer, controls;
+        let currentMesh, planeMesh, stencilGroup;
+        let clippingPlane;
+        let startPoint = null;
+        let shapeColor = 0x2563eb;
+        let currentShapeType = 'box';
+        let interactionMode = 'rotate';
+        let isAnimating = false;
+
         const wrapper = document.getElementById('viewport-wrapper');
         const miniCanvas = document.getElementById('mini-canvas');
         const ctx = miniCanvas.getContext('2d');
-        miniCanvas.width = 120; miniCanvas.height = 120;
+        miniCanvas.width = 140; miniCanvas.height = 140;
 
-        init(); animate();
+        init();
+        animate();
 
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(35, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
-            camera.position.set(0, 5, 20);
+            camera.position.set(0, 5, 20); 
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-            renderer.setClearColor(0xf8fafc, 1);
-            renderer.localClippingEnabled = true;
+            renderer.localClippingEnabled = true; 
             wrapper.appendChild(renderer.domElement);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.target.set(0, 0, 0);
+            controls.enablePan = false;
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            const sun = new THREE.DirectionalLight(0xffffff, 0.5);
-            sun.position.set(5, 10, 7.5);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+            sun.position.set(10, 20, 10);
             scene.add(sun);
 
-            // [UX 수정] 초기 평면의 방향을 반전 (윗부분이 사라지도록)
-            clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 10);
+            clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 10); 
             createShape('box');
 
-            renderer.domElement.addEventListener('pointerdown', onStart);
-            renderer.domElement.addEventListener('pointermove', onMove);
+            renderer.domElement.addEventListener('pointerdown', onStart, { passive: false });
+            renderer.domElement.addEventListener('pointermove', onMove, { passive: false });
             window.addEventListener('pointerup', onEnd);
             window.addEventListener('resize', onWindowResize);
+            updateControls();
+        }
+
+        function setMode(mode) {
+            interactionMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.id === 'btn-' + mode));
+            
+            const hint = document.getElementById('mode-hint');
+            if(hint) {
+                if (mode === 'rotate') {
+                    hint.innerText = "Drag the shape to observe from different angles.";
+                    renderer.domElement.style.cursor = 'grab';
+                } else {
+                    hint.innerText = "Draw a line across the shape to slice it!";
+                    renderer.domElement.style.cursor = 'crosshair';
+                }
+            }
+            updateControls();
+        }
+
+        function updateControls() {
+            controls.enabled = (interactionMode === 'rotate' && !isAnimating);
+            if(controls.enabled) {
+                controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+            }
         }
 
         function createShape(type) {
-            if (currentMesh) { scene.remove(currentMesh); scene.remove(stencilGroup); scene.remove(planeMesh); }
-            let geo;
-            if (type === 'box') geo = new THREE.BoxGeometry(4, 4, 4);
-            else if (type === 'cylinder') geo = new THREE.CylinderGeometry(2, 2, 5, 64);
-            else if (type === 'cone') geo = new THREE.ConeGeometry(2.5, 5, 64);
-            else geo = new THREE.SphereGeometry(2.5, 64, 64);
+            if (currentMesh) {
+                currentMesh.geometry.dispose(); currentMesh.material.dispose(); scene.remove(currentMesh);
+            }
+            if (stencilGroup) {
+                stencilGroup.children.forEach(child => { child.geometry.dispose(); child.material.dispose(); });
+                scene.remove(stencilGroup);
+            }
+            if (planeMesh) {
+                planeMesh.geometry.dispose(); planeMesh.material.dispose(); scene.remove(planeMesh);
+            }
 
-            // [핵심 수정] 단면 투명 문제 해결 - Stencil 정석 구현
-            const mat = new THREE.MeshStandardMaterial({
-                color: shapeColor, clippingPlanes: [clippingPlane], side: THREE.FrontSide
+            let geometry;
+            switch(type) {
+                case 'box': geometry = new THREE.BoxGeometry(4, 4, 4); break;
+                case 'cylinder': geometry = new THREE.CylinderGeometry(2, 2, 5, 64); break;
+                case 'cone': geometry = new THREE.ConeGeometry(2.5, 5, 64); break;
+                case 'sphere': geometry = new THREE.SphereGeometry(2.5, 64, 64); break;
+            }
+
+            // [버그 수정 2] Solid Section 구현을 위한 재질 설정 강화
+            const material = new THREE.MeshStandardMaterial({
+                color: shapeColor, metalness: 0.1, roughness: 0.4,
+                clippingPlanes: [clippingPlane], 
+                side: THREE.DoubleSide, // 안쪽 벽면도 렌더링되게 함
+                clipShadows: true
             });
-            currentMesh = new THREE.Mesh(geo, mat);
-            currentMesh.renderOrder = 6; // 가장 나중에
+            currentMesh = new THREE.Mesh(geometry, material);
+            currentMesh.renderOrder = 6; 
             scene.add(currentMesh);
 
+            // [버그 수정 2] 더욱 견고한 스텐실 캡핑 로직
             stencilGroup = new THREE.Group();
             const baseMat = new THREE.MeshBasicMaterial({
                 depthWrite: false, depthTest: true, colorWrite: false, stencilWrite: true,
-                stencilFunc: THREE.AlwaysStencilFunc, side: THREE.DoubleSide, clippingPlanes: [clippingPlane]
+                stencilFunc: THREE.AlwaysStencilFunc, clippingPlanes: [clippingPlane]
             });
-            // Pass 1: Back faces -> Increment
-            const mat0 = baseMat.clone(); mat0.side = THREE.BackSide;
-            mat0.stencilFail = mat0.stencilZFail = mat0.stencilZPass = THREE.IncrementWrapStencilOp;
-            stencilGroup.add(new THREE.Mesh(geo, mat0));
-            // Pass 2: Front faces -> Decrement
-            const mat1 = baseMat.clone(); mat1.side = THREE.FrontSide;
-            mat1.stencilFail = mat1.stencilZFail = mat1.stencilZPass = THREE.DecrementWrapStencilOp;
-            stencilGroup.add(new THREE.Mesh(geo, mat1));
-            stencilGroup.renderOrder = 1; scene.add(stencilGroup);
+            
+            // Pass 1: Back faces (Increment)
+            const matBack = baseMat.clone();
+            matBack.side = THREE.BackSide;
+            matBack.stencilFail = matBack.stencilZFail = matBack.stencilZPass = THREE.IncrementWrapStencilOp;
+            const meshBack = new THREE.Mesh(geometry, matBack);
+            meshBack.renderOrder = 1;
+            stencilGroup.add(meshBack);
 
-            const planeGeo = new THREE.PlaneGeometry(100, 100);
+            // Pass 2: Front faces (Decrement)
+            const matFront = baseMat.clone();
+            matFront.side = THREE.FrontSide;
+            matFront.stencilFail = matFront.stencilZFail = matFront.stencilZPass = THREE.DecrementWrapStencilOp;
+            const meshFront = new THREE.Mesh(geometry, matFront);
+            meshFront.renderOrder = 2; 
+            stencilGroup.add(meshFront);
+            scene.add(stencilGroup);
+
+            const planeGeom = new THREE.PlaneGeometry(100, 100); 
             const planeMat = new THREE.MeshStandardMaterial({
-                color: 0xfacc15, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide,
-                stencilWrite: true, stencilRef: 0, stencilFunc: THREE.NotEqualStencilFunc
+                color: 0xfacc15, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide,
+                stencilWrite: true, 
+                stencilRef: 0, 
+                stencilFunc: THREE.NotEqualStencilFunc,
+                clippingPlanes: [clippingPlane],
+                polygonOffset: true,
+                polygonOffsetFactor: -1.0,
+                polygonOffsetUnits: -4.0
             });
-            planeMesh = new THREE.Mesh(planeGeo, planeMat);
-            planeMesh.renderOrder = 2; scene.add(planeMesh);
-            currentShapeType = type; updatePlanePos();
+            planeMesh = new THREE.Mesh(planeGeom, planeMat);
+            planeMesh.renderOrder = 3;
+            scene.add(planeMesh);
+
+            updatePlanePos();
+            currentShapeType = type;
         }
 
-        // --- 스와이프 슬라이싱 ---
-        function onStart(e) { if (interactionMode !== 'slice') return; startPoint = { x: e.clientX, y: e.clientY }; const line = document.getElementById('slice-line'); line.style.display = 'block'; line.style.width = '0px'; line.style.left = startPoint.x + 'px'; line.style.top = startPoint.y + 'px'; }
-        function onMove(e) { if (!startPoint || interactionMode !== 'slice') return; const dx = e.clientX - startPoint.x, dy = e.clientY - startPoint.y, dist = Math.sqrt(dx * dx + dy * dy), line = document.getElementById('slice-line'); line.style.width = dist + 'px'; line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`; line.style.transformOrigin = '0 0'; }
-        function onEnd(e) {
-            if (!startPoint || interactionMode !== 'slice') return;
-            const dx = e.clientX - startPoint.x, dy = e.clientY - startPoint.y;
-            if (Math.sqrt(dx * dx + dy * dy) > 30) {
-                const rect = wrapper.getBoundingClientRect();
-                const x1 = ((startPoint.x - rect.left) / rect.width) * 2 - 1, y1 = -((startPoint.y - rect.top) / rect.height) * 2 + 1;
-                const x2 = ((e.clientX - rect.left) / rect.width) * 2 - 1, y2 = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                const v1 = new THREE.Vector3(x1, y1, 0.5).unproject(camera), v2 = new THREE.Vector3(x2, y2, 0.5).unproject(camera);
-                const swipeDir = v2.sub(v1).normalize(), viewDir = camera.getWorldDirection(new THREE.Vector3());
+        function onStart(e) {
+            if (interactionMode !== 'slice' || isAnimating) return;
+            e.preventDefault();
+            startPoint = { x: e.clientX, y: e.clientY };
+            const line = document.getElementById('slice-line');
+            if(line) {
+                line.style.display = 'block'; line.style.width = '0px';
+                line.style.left = startPoint.x + 'px'; line.style.top = startPoint.y + 'px';
+            }
+        }
 
-                // [UX 수정] 법선 벡터를 반전 (윗부분이 사라지도록)
-                const normal = swipeDir.cross(viewDir).normalize().multiplyScalar(-1);
+        function onMove(e) {
+            if (interactionMode !== 'slice' || !startPoint) return;
+            const line = document.getElementById('slice-line');
+            if(line) {
+                const dx = e.clientX - startPoint.x, dy = e.clientY - startPoint.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                line.style.width = dist + 'px';
+                line.style.transform = `rotate(${angle}rad)`; line.style.transformOrigin = '0 0';
+            }
+        }
+
+        function onEnd(e) {
+            if (interactionMode !== 'slice' || !startPoint) return;
+            const dx = e.clientX - startPoint.x, dy = e.clientY - startPoint.y;
+
+            if (Math.sqrt(dx*dx + dy*dy) > 40) { 
+                const rect = wrapper.getBoundingClientRect();
+                const x1 = ((startPoint.x - rect.left) / rect.width) * 2 - 1;
+                const y1 = -((startPoint.y - rect.top) / rect.height) * 2 + 1;
+                const x2 = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                const y2 = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                const v1 = new THREE.Vector3(x1, y1, 0.5).unproject(camera);
+                const v2 = new THREE.Vector3(x2, y2, 0.5).unproject(camera);
+                const swipeDir = v2.clone().sub(v1).normalize();
+                const viewDir = camera.getWorldDirection(new THREE.Vector3());
+                
+                const normal = swipeDir.clone().cross(viewDir).normalize().multiplyScalar(-1);
                 applySlice(normal);
             }
-            startPoint = null; document.getElementById('slice-line').style.display = 'none';
+            startPoint = null;
+            const line = document.getElementById('slice-line');
+            if(line) line.style.display = 'none';
         }
 
-        function performFixedSlice(dir) {
-            setMode('slice');
-            // [UX 수정] 고정 자르기 방향도 윗부분이 사라지도록 벡터 수정
-            let n = new THREE.Vector3(0, 1, 0); // 가로 (위가 날아감)
-            if (dir === 'vertical') n.set(1, 0, 0); // 세로
-            if (dir === 'diagonal') n.set(1, 1, 0).normalize(); // 사선
-            applySlice(n);
+        function performFixedSlice(direction) {
+            if(isAnimating) return;
+            setMode('slice'); 
+            let normal;
+            if (direction === 'horizontal') normal = new THREE.Vector3(0, 1, 0);
+            else if (direction === 'vertical') normal = new THREE.Vector3(-1, 0, 0); 
+            else if (direction === 'diagonal') normal = new THREE.Vector3(-1, 1, 0).normalize();
+            applySlice(normal);
         }
 
-        function applySlice(n) {
-            clippingPlane.normal.copy(n); clippingPlane.constant = 10; updatePlanePos();
-            gsap.to(clippingPlane, {
-                constant: 0, duration: 1.2, ease: "power2.out", onUpdate: updatePlanePos, onComplete: () => {
-                    document.getElementById('section-preview').classList.add('visible'); drawMiniMap();
+        function applySlice(normal) {
+            isAnimating = true;
+            controls.enabled = false;
+            
+            clippingPlane.normal.copy(normal);
+            clippingPlane.constant = 10; 
+            updatePlanePos();
+
+            const preview = document.getElementById('section-preview');
+            if(preview) preview.classList.remove('visible');
+
+            gsap.to(clippingPlane, { 
+                constant: 0, 
+                duration: 1.4, 
+                ease: "expo.out",
+                onUpdate: updatePlanePos,
+                onComplete: () => {
+                    if(preview) preview.classList.add('visible');
+                    drawMiniMap();
+                    focusCamera(normal);
                 }
+            });
+
+            gsap.to(currentMesh.rotation, {
+                y: currentMesh.rotation.y + Math.PI * 2, 
+                duration: 1.6,
+                ease: "power3.inOut"
+            });
+        }
+
+        // [버그 수정 1] 단면 평면의 정면을 바라보도록 카메라 정렬 로직 대폭 개선
+        function focusCamera(normal) {
+            const distance = 16;
+            const targetPos = normal.clone().multiplyScalar(distance);
+            
+            const upVector = new THREE.Vector3(0, 1, 0);
+            if (Math.abs(normal.y) > 0.95) {
+                upVector.set(0, 0, 1); 
+            }
+
+            gsap.to(camera.position, {
+                x: targetPos.x, y: targetPos.y, z: targetPos.z,
+                duration: 1.5, 
+                ease: "power3.inOut",
+                onUpdate: () => {
+                    camera.up.copy(upVector);
+                    camera.lookAt(0, 0, 0);
+                    updatePlanePos(); 
+                },
+                onComplete: () => {
+                    isAnimating = false;
+                    updateControls();
+                    controls.update();
+                }
+            });
+
+            gsap.to(controls.target, { 
+                x: 0, y: 0, z: 0, 
+                duration: 1.5, 
+                ease: "power3.inOut" 
             });
         }
 
         function drawMiniMap() {
-            ctx.clearRect(0, 0, 120, 120); ctx.fillStyle = "#facc15"; ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 5;
+            ctx.clearRect(0, 0, 140, 140);
+            ctx.fillStyle = "#facc15"; ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 4;
+            
+            const type = currentShapeType;
+            const norm = clippingPlane.normal;
+            let shape = "SECTION";
+            
             ctx.beginPath();
-            if (currentShapeType === 'sphere' || (currentShapeType === 'cylinder' && Math.abs(clippingPlane.normal.y) > 0.8)) ctx.arc(60, 60, 40, 0, Math.PI * 2);
-            else ctx.rect(30, 30, 60, 60);
+            if (type === 'sphere') {
+                ctx.arc(70, 70, 50, 0, Math.PI*2); shape = "CIRCLE";
+            } else if (type === 'box') {
+                ctx.rect(35, 35, 70, 70); shape = "SQUARE";
+            } else if (type === 'cylinder') {
+                if (Math.abs(norm.y) > 0.8) { ctx.arc(70, 70, 50, 0, Math.PI*2); shape = "CIRCLE"; }
+                else { ctx.rect(35, 25, 70, 90); shape = "RECTANGLE"; }
+            } else if (type === 'cone') {
+                if (Math.abs(norm.y) > 0.8) { ctx.arc(70, 70, 40, 0, Math.PI*2); shape = "CIRCLE"; }
+                else { ctx.moveTo(70, 25); ctx.lineTo(25, 115); ctx.lineTo(115, 115); ctx.closePath(); shape = "TRIANGLE"; }
+            }
             ctx.fill(); ctx.stroke();
-            document.getElementById('shape-name').innerText = (currentShapeType === 'sphere') ? "원" : "단면";
+            const nameEl = document.getElementById('shape-name');
+            if(nameEl) nameEl.innerText = shape;
         }
 
-        function setMode(m) {
-            interactionMode = m;
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.id === 'btn-' + m));
-            controls.enabled = (m === 'rotate');
-            wrapper.style.cursor = (m === 'rotate') ? 'grab' : 'crosshair';
-            // [UX 수정] 모드에 따라 힌트 문구를 정확히 변경
-            document.getElementById('mode-hint').innerText = (m === 'rotate') ? "도형을 마우스로 자유롭게 돌려보세요!" : "도형 위를 슥 그어서 단면을 잘라보세요!";
+        function changeColor(hex) {
+            shapeColor = new THREE.Color(hex).getHex();
+            if (currentMesh) currentMesh.material.color.setHex(shapeColor);
         }
 
-        function updatePlanePos() { if (planeMesh) { planeMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), clippingPlane.normal); planeMesh.position.copy(clippingPlane.normal).multiplyScalar(-clippingPlane.constant); } }
-        function changeColor(c) { shapeColor = new THREE.Color(c).getHex(); if (currentMesh) currentMesh.material.color.setHex(shapeColor); }
-        function changeShape(t, b) { document.querySelectorAll('.btn-shape').forEach(x => x.classList.remove('active')); b.classList.add('active'); createShape(t); resetView(); }
-        function resetView() { document.getElementById('section-preview').classList.remove('visible'); gsap.to(clippingPlane, { constant: 10, duration: 0.6, onUpdate: updatePlanePos }); }
-        function onWindowResize() { camera.aspect = wrapper.clientWidth / wrapper.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(wrapper.clientWidth, wrapper.clientHeight); }
-        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        function changeShape(type, btn) {
+            if(isAnimating) return;
+            document.querySelectorAll('.btn-shape').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+            createShape(type);
+            resetView();
+        }
+
+        function resetView() {
+            const preview = document.getElementById('section-preview');
+            if(preview) preview.classList.remove('visible');
+            gsap.to(clippingPlane, { constant: 10, duration: 0.8, onUpdate: updatePlanePos });
+            
+            gsap.to(camera.position, {
+                x: 0, y: 5, z: 20, duration: 1.2, ease: "power2.inOut",
+                onUpdate: () => {
+                    camera.up.set(0, 1, 0);
+                    controls.update();
+                }
+            });
+            gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.2 });
+        }
+
+        function updatePlanePos() {
+            if (!planeMesh) return;
+            planeMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), clippingPlane.normal);
+            planeMesh.position.copy(clippingPlane.normal).multiplyScalar(-clippingPlane.constant);
+        }
+
+        function onWindowResize() {
+            camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls.enabled) controls.update();
+            renderer.render(scene, camera);
+        }
     </script>
 </body>
 
