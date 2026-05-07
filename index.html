@@ -225,7 +225,7 @@
     <script>
         let scene, camera, renderer, controls;
         let currentMesh, planeMesh;
-        let stencilMeshes = [];
+        let stencilGroup; // 공식 예제처럼 그룹으로 관리
         let clippingPlane;
         let startPoint = null;
         let shapeColor = 0x3b82f6;
@@ -304,8 +304,7 @@
 
         function createShape(type) {
             if (currentMesh) scene.remove(currentMesh);
-            stencilMeshes.forEach(m => scene.remove(m));
-            stencilMeshes = [];
+            if (stencilGroup) scene.remove(stencilGroup);
             if (planeMesh) scene.remove(planeMesh);
 
             let geometry;
@@ -322,66 +321,71 @@
                 clippingPlanes: [clippingPlane], side: THREE.FrontSide
             });
             currentMesh = new THREE.Mesh(geometry, material);
-            currentMesh.renderOrder = 4;
+            currentMesh.renderOrder = 6; 
             scene.add(currentMesh);
 
-            const planeGeom = new THREE.PlaneGeometry(100, 100); 
-            const planeMat = new THREE.MeshBasicMaterial({
-                color: 0xfacc15,
-                side: THREE.DoubleSide,
-                depthWrite: false, 
-                depthTest: true,
-                stencilWrite: true, 
-                stencilRef: 1, 
-                stencilMask: 0xff,
-                stencilFunc: THREE.EqualStencilFunc,
-                stencilFail: THREE.Keep,
-                stencilZFail: THREE.Keep,
-                stencilZPass: THREE.ReplaceStencilOp
-            });
-            planeMesh = new THREE.Mesh(planeGeom, planeMat);
-            planeMesh.renderOrder = 3; 
-            planeMesh.frustumCulled = false;
-            scene.add(planeMesh);
+            // 공식 예제: createPlaneStencilGroup(geometry, plane, renderOrder)
+            stencilGroup = createPlaneStencilGroup(geometry, clippingPlane, 3);
+            scene.add(stencilGroup);
 
-            createStencilMeshes(geometry);
+            const planeGeom = new THREE.PlaneGeometry(100, 100); 
+            const planeMat = new THREE.MeshStandardMaterial({
+                color: 0xfacc15,
+                metalness: 0.1,
+                roughness: 0.75,
+                side: THREE.DoubleSide,
+                stencilWrite: true,
+                stencilRef: 0,
+                stencilFunc: THREE.NotEqualStencilFunc,
+                stencilFail: THREE.ReplaceStencilOp,
+                stencilZFail: THREE.ReplaceStencilOp,
+                stencilZPass: THREE.ReplaceStencilOp,
+            });
+            
+            planeMesh = new THREE.Mesh(planeGeom, planeMat);
+            planeMesh.renderOrder = 4;
+            scene.add(planeMesh);
 
             updatePlanePos();
             currentShapeType = type;
         }
 
-        function createStencilMeshes(geometry) {
+        // 공식 예제 webgl_clipping_stencil 로직과 100% 동일한 함수
+        function createPlaneStencilGroup(geometry, plane, renderOrder) {
+            const group = new THREE.Group();
             const baseMat = new THREE.MeshBasicMaterial({
-                depthWrite: false, 
-                depthTest: true, 
-                colorWrite: false, 
+                depthWrite: false,
+                depthTest: true,
+                colorWrite: false,
                 stencilWrite: true,
-                stencilFunc: THREE.AlwaysStencilFunc, 
-                stencilRef: 0,
-                stencilMask: 0xff,
-                side: THREE.DoubleSide
+                stencilFunc: THREE.AlwaysStencilFunc,
+                side: THREE.DoubleSide,
+                clippingPlanes: [plane] // 반드시 클리핑이 포함되어야 함
             });
-            
-            // 패스 1: 뒷면 (증가)
-            const mat0 = baseMat.clone(); 
+
+            // Pass 1: Back faces - Increment
+            const mat0 = baseMat.clone();
             mat0.side = THREE.BackSide;
+            mat0.stencilFail = THREE.IncrementWrapStencilOp;
+            mat0.stencilZFail = THREE.IncrementWrapStencilOp;
             mat0.stencilZPass = THREE.IncrementWrapStencilOp;
             const mesh0 = new THREE.Mesh(geometry, mat0);
-            mesh0.renderOrder = 1; 
-            mesh0.frustumCulled = false;
-            scene.add(mesh0);
-            stencilMeshes.push(mesh0);
+            mesh0.renderOrder = renderOrder;
+            group.add(mesh0);
 
-            // 패스 2: 앞면 (감소)
-            const mat1 = baseMat.clone(); 
+            // Pass 2: Front faces - Decrement
+            const mat1 = baseMat.clone();
             mat1.side = THREE.FrontSide;
+            mat1.stencilFail = THREE.DecrementWrapStencilOp;
+            mat1.stencilZFail = THREE.DecrementWrapStencilOp;
             mat1.stencilZPass = THREE.DecrementWrapStencilOp;
             const mesh1 = new THREE.Mesh(geometry, mat1);
-            mesh1.renderOrder = 2;
-            mesh1.frustumCulled = false;
-            scene.add(mesh1);
-            stencilMeshes.push(mesh1);
+            mesh1.renderOrder = renderOrder;
+            group.add(mesh1);
+
+            return group;
         }
+
 
 
         // --- 스와이프 슬라이싱 로직 ---
@@ -604,10 +608,7 @@
             requestAnimationFrame(animate);
             controls.update();
             updatePlanePos();
-            if (renderer) {
-                renderer.clearStencil(); // 매 프레임 스텐실 버퍼 강제 초기화
-                renderer.render(scene, camera);
-            }
+            renderer.render(scene, camera);
         }
     </script>
 </body>
